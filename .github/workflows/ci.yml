@@ -1,11 +1,28 @@
 # Source: GitHub starter workflow "Simple workflow" (MIT) — https://github.com/actions/starter-workflows/blob/main/ci/blank.yml
+#
+# Repaired by repocurator (feature 002):
+#   - `push` and `pull_request` triggered on `main`; this repository's default
+#     branch is `master`, so the workflow had never run on a push to it.
+#   - the starter had no build job at all, even though CMakeLists.txt defines
+#     nine `add_executable` targets. One of those, `Q2` (src/2021-3-18/Q2.cpp),
+#     is an empty exercise stub with no `main` and cannot link, so the build
+#     job below names the other eight targets explicitly instead of building
+#     the default `all` target, which would fail on every run.
+#   - the test job ran the starter's placeholder echo; it now builds and runs
+#     a real smoke test for src/tool/MyArray.h and src/tool/LinkedList.h, the
+#     two hand-written container templates under src/tool/ (only MyArray.h is
+#     included by an exercise today, but neither is covered by any exercise
+#     program, so a break in either would otherwise go unnoticed).
+#
+# No step was removed: there was no build job to remove anything from, and
+# nothing here reaches outside the repository.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 # The workflow token is read-only by default.
@@ -41,7 +58,29 @@ jobs:
           fi
           echo "All actions are pinned to full-length commit SHAs."
 
-      # Add your project's linters below this line.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure with CMake
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build the exercise programs
+        shell: bash
+        run: cmake --build build --target Q1_doubleDimensionalArray Q2_functionAbout Q3_pointerAbout Q1 Q3 Q3Test Q4 Q5
+
+      - name: Check that a built program runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x build/Q4
+          ./build/Q4 >/dev/null
 
   test:
     name: Test
@@ -52,7 +91,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # Replace the step below with your project's test command. Pin any setup
-      # action you add to a full commit SHA, like the checkout step above.
-      - name: Run tests
-        run: echo "No tests yet. Replace this step with your project's test command."
+      # src/tool/MyArray.h and src/tool/LinkedList.h are header-only and pull
+      # in nothing platform specific, so they build and run natively here.
+      - name: Build and run the container smoke test
+        shell: bash
+        run: g++ -std=c++20 -I src/tool -o array_smoke_test test/array_smoke_test.cpp && ./array_smoke_test
